@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI QA Automation Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans h-screen flex overflow-hidden">
+
+    <!-- ================= SIDEBAR IZQUIERDO ================= -->
+    <aside class="w-96 bg-white border-r border-gray-200 flex flex-col h-full shrink-0 shadow-lg">
+        <!-- Header Sidebar -->
+        <div class="p-4 border-b border-gray-200 bg-gray-900 text-white flex justify-between items-center">
+            <div>
+                <h1 class="font-bold text-lg leading-tight">AI QA Agent</h1>
+                <p class="text-xs text-gray-400">Playwright + Ollama</p>
+            </div>
+            <button onclick="openModal()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1.5 px-3 rounded text-xs transition shadow">
+                + Nuevo Case
+            </button>
+        </div>
+
+        <!-- Acciones de Import/Export -->
+<div class="p-3 bg-gray-50 border-b border-gray-200 flex gap-2">
+    <input type="file" id="import-file" accept=".json" class="hidden" onchange="handleImport(event)">
+    <button onclick="document.getElementById('import-file').click()" class="flex-1 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 font-semibold py-1 px-2 rounded text-xs transition">
+        📥 Importar
+    </button>
+    <button onclick="exportTests()" class="flex-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 font-semibold py-1 px-2 rounded text-xs transition">
+        📤 Exportar
+    </button>
+    <!-- NUEVO BOTÓN -->
+    <button onclick="viewMetrics()" class="flex-1 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200 font-semibold py-1 px-2 rounded text-xs transition">
+        📊 Métricas
+    </button>
+</div>
+
+        <!-- Lista de Casos Agrupados (Scrollable) -->
+        <div id="test-groups-container" class="flex-1 overflow-y-auto p-3 space-y-4">
+            <p class="text-gray-400 text-xs text-center py-4">Cargando casos de prueba...</p>
+        </div>
+    </aside>
+
+    <!-- ================= PANTALLA PRINCIPAL (RESULTADOS) ================= -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden bg-gray-50">
+        <!-- Header Principal -->
+        <header class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center shadow-sm shrink-0">
+            <h2 class="text-xl font-bold text-gray-800">Reporte & Resultados de Ejecución</h2>
+            <div id="status-badge-header">
+                <span class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-semibold">Esperando selección</span>
+            </div>
+        </header>
+
+        <!-- Contenido Dinámico de Reporte (Scrollable) -->
+        <div id="main-report-view" class="flex-1 overflow-y-auto p-6">
+            <div class="h-full flex flex-col items-center justify-center text-gray-400">
+                <svg class="w-16 h-16 mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                <p class="text-base font-medium">Selecciona un caso para ver su último reporte o presiona ▶ para ejecutarlo.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Crear/Editar Test -->
+    <div id="test-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onclick="handleModalBackdropClick(event)">
+        <div class="bg-white p-6 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl relative" onclick="event.stopPropagation()">
+            <h2 id="modal-title" class="text-2xl font-bold mb-4 text-gray-800">Crear Caso de Prueba</h2>
+            <form id="test-form" onsubmit="saveTest(event)">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                        <label class="block text-xs font-bold mb-1 uppercase text-gray-600">ID</label>
+                        <input type="text" id="t-id" class="w-full border border-gray-300 p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" required placeholder="TC-001">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold mb-1 uppercase text-gray-600">Nombre</label>
+                        <input type="text" id="t-name" class="w-full border border-gray-300 p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold mb-1 uppercase text-gray-600">Grupo / Módulo</label>
+                        <input type="text" id="t-group" class="w-full border border-gray-300 p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Autenticación">
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-xs font-bold mb-1 uppercase text-gray-600">Descripción</label>
+                    <input type="text" id="t-desc" class="w-full border border-gray-300 p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" required>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-xs font-bold mb-1 uppercase text-gray-600">URL Inicial</label>
+                    <input type="url" id="t-url" class="w-full border border-gray-300 p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" required placeholder="https://example.com">
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-xs font-bold mb-1 uppercase text-gray-600">Objetivo (Prompt para IA)</label>
+                    <textarea id="t-goal" class="w-full border border-gray-300 p-2 rounded h-20 text-sm focus:ring-2 focus:ring-blue-500 outline-none" required></textarea>
+                </div>
+                
+                <div class="border-t border-gray-200 pt-4 mt-4">
+                    <h3 class="font-bold mb-2 text-gray-700 text-sm">Aserciones Playwright (Opcional)</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                        <div>
+                            <label class="block text-xs font-bold mb-1 text-gray-600">URL contiene</label>
+                            <input type="text" id="t-assert-url" class="w-full border border-gray-300 p-2 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none" placeholder="/dashboard">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold mb-1 text-gray-600">Selector Visible</label>
+                            <input type="text" id="t-assert-sel" class="w-full border border-gray-300 p-2 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none" placeholder="#logout-btn">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold mb-1 text-gray-600">Textos Esperados (separados por coma)</label>
+                        <input type="text" id="t-assert-text" class="w-full border border-gray-300 p-2 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Éxito, Bienvenido">
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-2 mt-6">
+                    <button type="button" onclick="closeModal()" class="bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 transition">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 font-bold transition">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let testsData = [];
+        let currentBatchResults = [];
+        let activeTestId = null;
+        let isEditing = false;
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        async function loadTests() {
+            try {
+                const response = await fetch('/api/tests');
+                testsData = await response.json();
+                renderSidebarGroups();
+            } catch (error) {
+                console.error("Error al cargar los tests:", error);
+            }
+        }
+
+        function updateHeaderStatus(label, colorClasses) {
+            const badgeContainer = document.getElementById('status-badge-header');
+            badgeContainer.innerHTML = `<span class="${colorClasses} px-3 py-1 rounded-full text-xs font-semibold">${label}</span>`;
+        }
+
+        function renderSidebarGroups() {
+            const container = document.getElementById('test-groups-container');
+            container.innerHTML = '';
+
+            if (testsData.length === 0) {
+                container.innerHTML = `<p class="text-gray-400 text-xs text-center py-4">No hay casos creados.</p>`;
+                return;
+            }
+
+            const groups = {};
+            testsData.forEach(test => {
+                const groupName = test.group || 'Sin Grupo';
+                if (!groups[groupName]) groups[groupName] = [];
+                groups[groupName].push(test);
+            });
+
+            Object.keys(groups).forEach(groupName => {
+                const groupTests = groups[groupName];
+                const groupEl = document.createElement('div');
+                groupEl.className = 'border border-gray-200 rounded-lg bg-white overflow-hidden shadow-sm';
+                
+                groupEl.innerHTML = `
+                    <div class="bg-gray-100 p-2.5 flex justify-between items-center border-b border-gray-200">
+                        <span class="font-bold text-xs uppercase text-gray-700 tracking-wider">${groupName} (${groupTests.length})</span>
+                        <button onclick="runBatchTestsForGroup('${encodeURIComponent(groupName)}')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-1 px-2 rounded shadow transition flex items-center gap-1">
+                            ▶ Ejecutar Grupo
+                        </button>
+                    </div>
+                    <div class="divide-y divide-gray-100">
+                        ${groupTests.map(test => {
+                            const isActive = test.id === activeTestId;
+                            return `
+                                <div class="p-2.5 hover:bg-blue-50 transition flex justify-between items-center group ${isActive ? 'bg-blue-50 border-l-4 border-blue-600' : ''}">
+                                    <div class="cursor-pointer flex-1 mr-2 overflow-hidden" onclick="selectTest('${test.id}')">
+                                        <h4 class="font-bold text-xs text-gray-800 group-hover:text-blue-600 truncate">${test.id}:${test.name}</h4>
+                                        <p class="text-[11px] text-gray-500 line-clamp-1">${test.description}</p>
+                                    </div>
+                                    <div class="flex items-center space-x-1 opacity-80 group-hover:opacity-100 shrink-0">
+                                        <button onclick="event.stopPropagation(); runSingleTest('${test.id}')" title="Ejecutar" class="text-green-600 hover:text-green-800 text-xs p-1 font-bold">▶</button>
+                                        <button onclick="event.stopPropagation(); editTest('${test.id}')" title="Editar" class="text-blue-600 hover:text-blue-800 text-xs p-1">✏</button>
+                                        <button onclick="event.stopPropagation(); deleteTest('${test.id}')" title="Eliminar" class="text-red-600 hover:text-red-800 text-xs p-1">🗑️</button>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+                container.appendChild(groupEl);
+            });
+        }
+
+        // Consulta el último resultado existente sin disparar una nueva ejecución
+        async function selectTest(testId) {
+            activeTestId = testId;
+            renderSidebarGroups();
+
+            try {
+                const response = await fetch(`/api/results/${testId}`);
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.passed) {
+                        updateHeaderStatus('Última Ejecución: Exitosa ✅', 'bg-green-100 text-green-700 border border-green-200');
+                    } else {
+                        updateHeaderStatus('Última Ejecución: Fallida ❌', 'bg-red-100 text-red-700 border border-red-200');
+                    }
+                    renderSingleReport(result);
+                } else {
+                    updateHeaderStatus('Sin Ejecuciones', 'bg-gray-100 text-gray-600');
+                    document.getElementById('main-report-view').innerHTML = `
+                        <div class="h-full flex flex-col items-center justify-center text-gray-400">
+                            <p class="text-base font-medium">No hay registros previos para el caso <strong>${testId}</strong>.</p>
+                            <button onclick="runSingleTest('${testId}')" class="mt-3 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded text-xs transition">
+                                ▶ Ejecutar Ahora
+                            </button>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                updateHeaderStatus('Error de Consulta', 'bg-red-100 text-red-700');
+                document.getElementById('main-report-view').innerHTML = `
+                    <div class="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">
+                        Error al consultar el historial: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Dispara la ejecución del test mediante API
+        async function runSingleTest(testId) {
+            activeTestId = testId;
+            renderSidebarGroups();
+            updateHeaderStatus('Ejecutando...', 'bg-yellow-100 text-yellow-800 animate-pulse');
+            showLoadingState(`Ejecutando caso de prueba ${testId}...`);
+
+            try {
+                const response = await fetch(`/api/run/${testId}`, { method: 'POST' });
+                const result = await response.json();
+                
+                if (result.passed) {
+                    updateHeaderStatus('Exitoso ✅', 'bg-green-100 text-green-700 border border-green-200');
+                } else {
+                    updateHeaderStatus('Fallido ❌', 'bg-red-100 text-red-700 border border-red-200');
+                }
+
+                renderSingleReport(result);
+            } catch (error) {
+                updateHeaderStatus('Error de Sistema', 'bg-red-100 text-red-700');
+                document.getElementById('main-report-view').innerHTML = `
+                    <div class="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">
+                        <strong>Error en la ejecución:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        function runBatchTestsForGroup(encodedGroupName) {
+            const groupName = decodeURIComponent(encodedGroupName);
+            const groupTests = testsData.filter(t => (t.group || 'Sin Grupo') === groupName);
+            const testIds = groupTests.map(t => t.id);
+            runBatchTests(testIds, groupName);
+        }
+
+        async function runBatchTests(testIds, groupName) {
+            activeTestId = null;
+            renderSidebarGroups();
+            updateHeaderStatus('Ejecutando Lote...', 'bg-yellow-100 text-yellow-800 animate-pulse');
+            showLoadingState(`Ejecutando lote de ${testIds.length} pruebas para el grupo "${groupName}"...`);
+
+            try {
+                const response = await fetch('/api/run-batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ testIds })
+                });
+                const batchResult = await response.json();
+                
+                updateHeaderStatus(`Lote Finalizado (${batchResult.passedCount}/${batchResult.total})`, 'bg-blue-100 text-blue-700 border border-blue-200');
+                renderBatchReport(batchResult, groupName);
+            } catch (error) {
+                updateHeaderStatus('Error en Lote', 'bg-red-100 text-red-700');
+                document.getElementById('main-report-view').innerHTML = `
+                    <div class="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">
+                        <strong>Error en ejecución por grupo:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        function renderSingleReport(result) {
+            const mainView = document.getElementById('main-report-view');
+            const statusColor = result.passed ? 'text-green-700 bg-green-100 border-green-200' : 'text-red-700 bg-red-100 border-red-200';
+
+            mainView.innerHTML = `
+                <div class="max-w-4xl mx-auto space-y-6">
+                    <div class="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex justify-between items-center">
+                        <div>
+                            <span class="text-xs font-bold text-gray-400 uppercase tracking-wide">${result.testId}</span>
+                            <h3 class="text-2xl font-bold text-gray-800">${result.testName}</h3>
+                        </div>
+                        <span class="px-4 py-1.5 rounded-full font-bold text-sm border ${statusColor}">
+                            ${result.passed ? 'PASSED ✅' : 'FAILED ❌'}
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm text-center">
+                            <span class="text-xs text-gray-500 uppercase font-semibold">Pasos Utilizados</span>
+                            <p class="text-2xl font-bold text-gray-800 mt-1">${result.stepsUsed}</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm text-center">
+                            <span class="text-xs text-gray-500 uppercase font-semibold">Tiempo Total</span>
+                            <p class="text-2xl font-bold text-gray-800 mt-1">${(result.durationMs / 1000).toFixed(2)}s</p>
+                        </div>
+                    </div>
+
+                    ${result.error ? `<div class="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200 font-mono text-xs whitespace-pre-wrap">${result.error}</div>` : ''}
+
+                    <details class="bg-white border border-gray-200 rounded-lg shadow-sm" open>
+                        <summary class="font-bold text-gray-700 p-3 bg-gray-50 rounded-t-lg cursor-pointer hover:bg-gray-100 select-none">
+                            📝 Registros de Pasos (Logs)
+                        </summary>
+                        <div class="p-3 bg-gray-900 text-green-400 font-mono text-xs max-h-60 overflow-y-auto space-y-1">
+                            ${result.logs.map(l => `<div><span class="text-blue-400">[Paso ${l.step}]</span> <span class="text-yellow-300">${l.action.toUpperCase()}</span> -${l.thought}</div>`).join('')}
+                        </div>
+                    </details>
+
+                    ${result.screenshotPath ? `
+                        <details class="bg-white border border-gray-200 rounded-lg shadow-sm" open>
+                            <summary class="font-bold text-gray-700 p-3 bg-gray-50 rounded-t-lg cursor-pointer hover:bg-gray-100 select-none">
+                                📸 Captura de Pantalla Final
+                            </summary>
+                            <div class="p-3">
+                                <div class="max-h-96 overflow-y-auto border border-gray-300 rounded bg-gray-100">
+                                    <img src="/reports${result.screenshotPath}" class="w-full h-auto block" alt="Screenshot final">
+                                </div>
+                                <div class="mt-2 text-right">
+                                    <a href="/reports${result.screenshotPath}" target="_blank" class="text-blue-600 text-xs font-semibold hover:underline">Abrir imagen completa ↗</a>
+                                </div>
+                            </div>
+                        </details>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function renderBatchReport(batchResult, groupName) {
+            const mainView = document.getElementById('main-report-view');
+            currentBatchResults = batchResult.results || [];
+            const passRate = batchResult.total > 0 ? ((batchResult.passedCount / batchResult.total) * 100).toFixed(1) : '0';
+
+            const rows = currentBatchResults.map(r => `
+                <tr class="border-b border-gray-100 hover:bg-gray-50">
+                    <td class="p-3 font-bold text-xs">${r.testId}</td>
+                    <td class="p-3 text-xs">${r.testName}</td>
+                    <td class="p-3">
+                        <span class="px-2 py-0.5 rounded text-[11px] font-bold ${r.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                            ${r.passed ? 'PASSED' : 'FAILED'}
+                        </span>
+                    </td>
+                    <td class="p-3 text-xs">${r.stepsUsed}</td>
+                    <td class="p-3 text-xs">${(r.durationMs / 1000).toFixed(1)}s</td>
+                    <td class="p-3 text-xs">
+                        <button onclick="viewBatchDetail('${r.testId}')" class="text-blue-600 hover:underline font-semibold">Ver Detalle</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            mainView.innerHTML = `
+                <div class="max-w-5xl mx-auto space-y-6">
+                    <div class="bg-white p-5 rounded-lg border border-gray-200 shadow-sm flex justify-between items-center">
+                        <div>
+                            <span class="text-xs font-bold text-gray-400 uppercase tracking-wide">Ejecución de Grupo</span>
+                            <h3 class="text-2xl font-bold text-gray-800">${groupName}</h3>
+                        </div>
+                        <span class="text-sm font-bold bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-200">
+                            Tasa de Éxito: ${passRate}%
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-4 gap-4">
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm text-center">
+                            <span class="text-xs text-gray-500 uppercase font-semibold">Total Pruebas</span>
+                            <p class="text-2xl font-bold text-gray-800 mt-1">${batchResult.total}</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm text-center">
+                            <span class="text-xs text-gray-500 uppercase font-semibold">Exitosas</span>
+                            <p class="text-2xl font-bold text-green-600 mt-1">${batchResult.passedCount}</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm text-center">
+                            <span class="text-xs text-gray-500 uppercase font-semibold">Fallidas</span>
+                            <p class="text-2xl font-bold text-red-600 mt-1">${batchResult.failedCount}</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm text-center">
+                            <span class="text-xs text-gray-500 uppercase font-semibold">Duración Total</span>
+                            <p class="text-2xl font-bold text-gray-800 mt-1">${(batchResult.totalDurationMs / 1000).toFixed(1)}s</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-gray-50 text-gray-600 text-xs font-bold uppercase border-b border-gray-200">
+                                <tr>
+                                    <th class="p-3">ID</th>
+                                    <th class="p-3">Nombre</th>
+                                    <th class="p-3">Estado</th>
+                                    <th class="p-3">Pasos</th>
+                                    <th class="p-3">Tiempo</th>
+                                    <th class="p-3">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                ${rows}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        function viewBatchDetail(testId) {
+            const detail = currentBatchResults.find(r => r.testId === testId);
+            if (detail) {
+                renderSingleReport(detail);
+            }
+        }
+
+        function showLoadingState(message) {
+            const mainView = document.getElementById('main-report-view');
+            mainView.innerHTML = `
+                <div class="h-full flex flex-col items-center justify-center text-gray-500">
+                    <svg class="animate-spin h-10 w-10 text-blue-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p class="text-blue-600 font-semibold animate-pulse text-sm">${message}</p>
+                </div>
+            `;
+        }
+
+        function openModal() {
+            isEditing = false;
+            document.getElementById('test-form').reset();
+            document.getElementById('t-id').readOnly = false;
+            document.getElementById('modal-title').innerText = 'Crear Caso de Prueba';
+            document.getElementById('test-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('test-modal').classList.add('hidden');
+        }
+
+        function handleModalBackdropClick(e) {
+            if (e.target.id === 'test-modal') closeModal();
+        }
+
+        function editTest(id) {
+            const test = testsData.find(t => t.id === id);
+            if (!test) return;
+
+            isEditing = true;
+            document.getElementById('test-form').reset();
+            document.getElementById('modal-title').innerText = 'Editar Caso de Prueba';
+            
+            document.getElementById('t-id').value = test.id;
+            document.getElementById('t-id').readOnly = true;
+            document.getElementById('t-name').value = test.name || '';
+            document.getElementById('t-group').value = test.group || '';
+            document.getElementById('t-desc').value = test.description || '';
+            document.getElementById('t-url').value = test.startUrl || '';
+            document.getElementById('t-goal').value = test.goal || '';
+            
+            document.getElementById('t-assert-url').value = test.assertions?.expectedUrlContains || '';
+            document.getElementById('t-assert-sel').value = test.assertions?.expectedSelectorVisible || '';
+            document.getElementById('t-assert-text').value = test.assertions?.expectedTextVisible ? test.assertions.expectedTextVisible.join(', ') : '';
+
+            document.getElementById('test-modal').classList.remove('hidden');
+        }
+
+        async function saveTest(e) {
+            e.preventDefault();
+            const expectedTextVal = document.getElementById('t-assert-text').value;
+
+            const payload = {
+                id: document.getElementById('t-id').value.trim(),
+                name: document.getElementById('t-name').value.trim(),
+                group: document.getElementById('t-group').value.trim() || 'Sin Grupo',
+                description: document.getElementById('t-desc').value.trim(),
+                startUrl: document.getElementById('t-url').value.trim(),
+                goal: document.getElementById('t-goal').value.trim(),
+                maxSteps: 10,
+                assertions: {
+                    expectedUrlContains: document.getElementById('t-assert-url').value.trim() || undefined,
+                    expectedSelectorVisible: document.getElementById('t-assert-sel').value.trim() || undefined,
+                    expectedTextVisible: expectedTextVal ? expectedTextVal.split(',').map(s => s.trim()).filter(Boolean) : undefined
+                }
+            };
+
+            if (!payload.assertions.expectedUrlContains && !payload.assertions.expectedSelectorVisible && (!payload.assertions.expectedTextVisible || payload.assertions.expectedTextVisible.length === 0)) {
+                delete payload.assertions;
+            }
+
+            const method = isEditing ? 'PUT' : 'POST';
+            const url = isEditing ? `/api/tests/${payload.id}` : '/api/tests';
+
+            try {
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    closeModal();
+                    loadTests();
+                } else {
+                    alert('Error al guardar el caso de prueba.');
+                }
+            } catch (err) {
+                alert('Error de red al intentar guardar.');
+            }
+        }
+
+        async function deleteTest(id) {
+            if (confirm(`¿Deseas eliminar el caso ${id}?`)) {
+                try {
+                    await fetch(`/api/tests/${id}`, { method: 'DELETE' });
+                    if (activeTestId === id) activeTestId = null;
+                    loadTests();
+                } catch (err) {
+                    alert('Error al eliminar la prueba.');
+                }
+            }
+        }
+
+        function exportTests() {
+            if (testsData.length === 0) return alert("No hay casos para exportar.");
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(testsData, null, 2));
+            const node = document.createElement('a');
+            node.setAttribute("href", dataStr);
+            node.setAttribute("download", `ai_qa_suite_${Date.now()}.json`);
+            document.body.appendChild(node);
+            node.click();
+            node.remove();
+        }
+
+        function handleImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    const response = await fetch('/api/tests/import', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(importedData)
+                    });
+                    if (response.ok) {
+                        alert('Importación exitosa.');
+                        loadTests();
+                    }
+                } catch (err) {
+                    alert('Archivo JSON no válido.');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        async function viewMetrics() {
+    activeTestId = null;
+    renderSidebarGroups();
+    updateHeaderStatus('Panel de Métricas', 'bg-purple-100 text-purple-700 border border-purple-200');
+    showLoadingState('Cargando historial y métricas...');
+
+    try {
+        const response = await fetch('/api/metrics');
+        if (!response.ok) throw new Error('Error al cargar métricas');
+        const metrics = await response.json();
+
+        const mainView = document.getElementById('main-report-view');
+        
+        let testRows = Object.entries(metrics.testMetrics).map(([testId, data]) => `
+            <tr class="border-b border-gray-100 hover:bg-gray-50">
+                <td class="p-3 font-bold text-xs text-gray-700">${testId}</td>
+                <td class="p-3 text-xs">${data.totalRuns}</td>
+                <td class="p-3">
+                    <span class="px-2 py-0.5 rounded text-[11px] font-bold ${parseFloat(data.passRate) >= 80 ? 'bg-green-100 text-green-700' : parseFloat(data.passRate) >= 50 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}">
+                        ${data.passRate}
+                    </span>
+                </td>
+                <td class="p-3 text-xs">${data.averageDurationSec}s</td>
+            </tr>
+        `).join('');
+
+        if (!testRows) testRows = `<tr><td colspan="4" class="p-4 text-center text-gray-500 text-xs">No hay ejecuciones registradas.</td></tr>`;
+
+        mainView.innerHTML = `
+            <div class="max-w-5xl mx-auto space-y-6">
+                <div class="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">Métricas Globales Acumuladas</h3>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="bg-gray-50 p-4 rounded border border-gray-200 text-center">
+                            <span class="text-xs text-gray-500 uppercase font-bold">Total Ejecuciones</span>
+                            <p class="text-3xl font-bold text-gray-800 mt-2">${metrics.totalExecutions}</p>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded border border-green-200 text-center">
+                            <span class="text-xs text-green-600 uppercase font-bold">Aprobados</span>
+                            <p class="text-3xl font-bold text-green-700 mt-2">${metrics.passed}</p>
+                        </div>
+                        <div class="bg-red-50 p-4 rounded border border-red-200 text-center">
+                            <span class="text-xs text-red-600 uppercase font-bold">Fallidos</span>
+                            <p class="text-3xl font-bold text-red-700 mt-2">${metrics.failed}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                    <div class="p-4 bg-gray-50 border-b border-gray-200">
+                        <h4 class="font-bold text-gray-700 text-sm">Historial por Caso de Prueba</h4>
+                    </div>
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-gray-100 text-gray-600 text-xs font-bold uppercase border-b border-gray-200">
+                            <tr>
+                                <th class="p-3">Test ID</th>
+                                <th class="p-3">Ejecuciones Totales</th>
+                                <th class="p-3">Tasa de Éxito (Pass Rate)</th>
+                                <th class="p-3">Tiempo Promedio</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            ${testRows}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        document.getElementById('main-report-view').innerHTML = `
+            <div class="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">
+                <strong>Error:</strong> No se pudo cargar el historial.
+            </div>
+        `;
+    }
+}
+
+        loadTests();
+    </script>
+</body>
+</html>

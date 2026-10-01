@@ -1,0 +1,7 @@
+npm install (Descarga las librerías de tu package.json)
+
+npx playwright install chromium (Descarga únicamente el motor de Chrome que usa tu agent.ts)
+
+ollama pull qwen2.5:7b-instruct (Descarga los pesos del modelo LLM a tu máquina sin iniciar el chat interactivo)
+
+npx ts-node src/server.ts (Arranca el servidor)
